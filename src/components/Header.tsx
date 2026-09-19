@@ -3,9 +3,10 @@ import { Plus } from 'lucide-react';
 interface Props {
   onAdd: () => void;
   memoryCount: number;
+  reviewedCount?: number;
 }
 
-export default function Header({ onAdd, memoryCount }: Props) {
+export default function Header({ onAdd, memoryCount, reviewedCount = 0 }: Props) {
   return (
     <header className="relative pt-14 pb-8 md:pt-20 md:pb-12">
       <div className="container max-w-6xl">
@@ -31,6 +32,12 @@ export default function Header({ onAdd, memoryCount }: Props) {
                 <span className="text-base">🌿</span>
                 仅你可见
               </span>
+              {reviewedCount > 0 && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-moss-600/10 text-moss-700 text-sm border border-moss-300">
+                  <span className="text-base">🔖</span>
+                  已复核 <b className="font-semibold">{reviewedCount}</b> 段
+                </span>
+              )}
             </div>
           </div>
           <button

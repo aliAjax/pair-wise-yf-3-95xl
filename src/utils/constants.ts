@@ -16,6 +16,7 @@ export interface SmellMemory {
   want_again: boolean;
   created_at: string;
   updated_at: string;
+  review_batch_id?: string | null;
 }
 
 export const SEASONS: { value: Season; label: string; emoji: string }[] = [

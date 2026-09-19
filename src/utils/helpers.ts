@@ -1,4 +1,5 @@
-import type { SmellMemory } from './constants';
+import type { SmellMemory, SmellType, Season, Emotion } from './constants';
+import { getSmellTypeInfo } from './constants';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
@@ -76,4 +77,99 @@ export function isLightColor(hex: string): boolean {
 
 export function contrastTextColor(hex: string): string {
   return isLightColor(hex) ? '#2A2118' : '#FBF7EE';
+}
+
+// ── 封存复核批次 ──────────────────────────────────────────────
+
+export const REVIEW_MIN = 2;
+export const REVIEW_MAX = 4;
+/** 强度允许的最大档差 */
+export const REVIEW_INTENSITY_TOLERANCE = 3;
+
+export interface ReviewIssue {
+  kind: 'count' | 'location' | 'type' | 'intensity';
+  label: string;
+  detail: string;
+}
+
+/**
+ * 复核一致性校验：地点必须相同、气味类型必须一致、强度差不超过三档。
+ * 任一条件不满足，整批拒绝。
+ */
+export function validateReviewBatch(memories: SmellMemory[]): ReviewIssue[] {
+  const issues: ReviewIssue[] = [];
+  if (memories.length < REVIEW_MIN) return issues;
+
+  const locations = new Set(memories.map((m) => m.location.trim()));
+  if (locations.size > 1) {
+    issues.push({
+      kind: 'location',
+      label: '地点不同',
+      detail: `检测到 ${locations.size} 个地点：${[...locations].join('、')}`,
+    });
+  }
+
+  const types = new Set(memories.map((m) => m.smell_type));
+  if (types.size > 1) {
+    const labels = [...types].map(
+      (t) => getSmellTypeInfo(t as SmellType).label,
+    );
+    issues.push({
+      kind: 'type',
+      label: '气味类型不一致',
+      detail: `同批气味需为同一类型，当前混合了：${labels.join('、')}`,
+    });
+  }
+
+  const intensities = memories.map((m) => m.intensity);
+  const diff = Math.max(...intensities) - Math.min(...intensities);
+  if (diff > REVIEW_INTENSITY_TOLERANCE) {
+    issues.push({
+      kind: 'intensity',
+      label: '强度差超过三档',
+      detail: `强度区间 ${Math.min(...intensities)}～${Math.max(...intensities)}，相差 ${diff} 档（上限 ${REVIEW_INTENSITY_TOLERANCE} 档）`,
+    });
+  }
+
+  return issues;
+}
+
+export interface BatchSummary {
+  /** 批次编号，如 FH-0003 */
+  seq: number;
+  code: string;
+  count: number;
+  location: string;
+  smellType: SmellType;
+  intensityMin: number;
+  intensityMax: number;
+  avgIntensity: number;
+  avgHumidity: number;
+  seasons: Season[];
+  emotions: Emotion[];
+  createdAt: string;
+}
+
+export function buildBatchSummary(
+  seq: number,
+  memories: SmellMemory[],
+  createdAt: string,
+): BatchSummary {
+  const intensities = memories.map((m) => m.intensity);
+  const humidities = memories.map((m) => m.humidity);
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  return {
+    seq,
+    code: `FH-${String(seq).padStart(4, '0')}`,
+    count: memories.length,
+    location: memories[0].location.trim(),
+    smellType: memories[0].smell_type,
+    intensityMin: Math.min(...intensities),
+    intensityMax: Math.max(...intensities),
+    avgIntensity: round1(intensities.reduce((a, b) => a + b, 0) / intensities.length),
+    avgHumidity: round1(humidities.reduce((a, b) => a + b, 0) / humidities.length),
+    seasons: [...new Set(memories.map((m) => m.season))],
+    emotions: [...new Set(memories.map((m) => m.emotion))],
+    createdAt,
+  };
 }

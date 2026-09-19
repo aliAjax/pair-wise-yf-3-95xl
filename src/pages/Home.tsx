@@ -4,9 +4,10 @@ import FilterPanel from '../components/FilterPanel';
 import VisualizationPanel from '../components/VisualizationPanel';
 import MemoryCard from '../components/MemoryCard';
 import MemoryModal from '../components/MemoryModal';
-import { useMemoryStore } from '../store/memoryStore';
+import ReviewBar from '../components/ReviewBar';
+import { useMemoryStore, selectReviewStats } from '../store/memoryStore';
 import type { Filters } from '../utils/helpers';
-import { filterMemories } from '../utils/helpers';
+import { filterMemories, validateReviewBatch } from '../utils/helpers';
 import type { SmellMemory } from '../utils/constants';
 import type { MemoryInput } from '../store/memoryStore';
 import { BookOpenCheck } from 'lucide-react';
@@ -18,11 +19,18 @@ const defaultFilters: Filters = {
 };
 
 export default function Home() {
-  const { memories, initIfEmpty, addMemory, updateMemory, deleteMemory } = useMemoryStore();
+  const { memories, batches, initIfEmpty, addMemory, updateMemory, deleteMemory, submitReview } =
+    useMemoryStore();
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SmellMemory | null>(null);
+
+  // 封存复核批次相关状态
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [reviewAttempted, setReviewAttempted] = useState(false);
+  const [highlightBatchId, setHighlightBatchId] = useState<string | null>(null);
 
   useEffect(() => {
     initIfEmpty();
@@ -32,6 +40,41 @@ export default function Home() {
     () => filterMemories(memories, filters),
     [memories, filters],
   );
+
+  const stats = useMemo(() => selectReviewStats(memories, batches), [memories, batches]);
+
+  // 批次 id → 编号 的索引，用于卡片徽标
+  const batchCodeMap = useMemo(() => {
+    const m = new Map<string, string>();
+    batches.forEach((b) => m.set(b.id, b.summary.code));
+    return m;
+  }, [batches]);
+
+  const activeBatchIds = useMemo(
+    () => new Set(batches.filter((b) => b.status === 'active').map((b) => b.id)),
+    [batches],
+  );
+
+  // 勾选仅作用于当前筛选结果；筛选与顺序均不改变。
+  // 筛选条件变化后，自动剔除不在当前结果中的勾选（原列表、顺序、筛选本身不变）
+  useEffect(() => {
+    if (!selectionMode) return;
+    const visibleIds = new Set(filteredMemories.map((m) => m.id));
+    setSelectedIds((ids) => ids.filter((id) => visibleIds.has(id)));
+  }, [filteredMemories, selectionMode]);
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedMemories = useMemo(
+    () => filteredMemories.filter((m) => selectedSet.has(m.id)),
+    [filteredMemories, selectedSet],
+  );
+
+  // 提交后随勾选变化实时刷新拒绝原因
+  const liveIssues = useMemo(() => {
+    if (!selectionMode || !reviewAttempted) return [];
+    if (selectedMemories.length < 2) return [];
+    return validateReviewBatch(selectedMemories);
+  }, [selectionMode, reviewAttempted, selectedMemories]);
 
   const handleFilterChange = (key: keyof Filters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -44,6 +87,8 @@ export default function Home() {
   const handleSubmit = (data: MemoryInput) => {
     if (editing) {
       updateMemory(editing.id, data);
+      // 编辑已复核记录会使其批次失效，关闭可能存在的摘要高亮
+      if (editing.review_batch_id) setHighlightBatchId(null);
     } else {
       addMemory(data);
     }
@@ -55,6 +100,37 @@ export default function Home() {
     if (window.confirm(msg)) {
       deleteMemory(id);
       if (expandedId === id) setExpandedId(null);
+      setSelectedIds((ids) => ids.filter((x) => x !== id));
+      setHighlightBatchId(null);
+    }
+  };
+
+  const enterSelection = () => {
+    setSelectionMode(true);
+    setSelectedIds([]);
+    setReviewAttempted(false);
+    setExpandedId(null);
+  };
+  const cancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds([]);
+    setReviewAttempted(false);
+  };
+  const toggleSelect = (id: string) => {
+    setSelectedIds((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    );
+  };
+
+  const handleReviewSubmit = () => {
+    setReviewAttempted(true);
+    if (selectedMemories.length < 2 || selectedMemories.length > 4) return;
+    const result = submitReview(selectedMemories.map((m) => m.id));
+    if (result.ok && result.batch) {
+      setHighlightBatchId(result.batch.id);
+      setSelectionMode(false);
+      setSelectedIds([]);
+      setReviewAttempted(false);
     }
   };
 
@@ -68,7 +144,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Header onAdd={openAddModal} memoryCount={memories.length} />
+      <Header onAdd={openAddModal} memoryCount={memories.length} reviewedCount={stats.reviewed} />
 
       <main className="container max-w-6xl pb-20">
         <FilterPanel
@@ -76,6 +152,19 @@ export default function Home() {
           onChange={handleFilterChange}
           onReset={resetFilters}
           resultCount={filteredMemories.length}
+        />
+
+        <ReviewBar
+          selectionMode={selectionMode}
+          selectedCount={selectedMemories.length}
+          onEnterSelection={enterSelection}
+          onCancelSelection={cancelSelection}
+          onSubmit={handleReviewSubmit}
+          issues={liveIssues}
+          lastResultBatch={batches.find((b) => b.id === highlightBatchId) ?? null}
+          batches={batches}
+          reviewedCount={stats.reviewed}
+          pendingCount={stats.pending}
         />
 
         <VisualizationPanel memories={filteredMemories} onSelect={scrollToCard} />
@@ -87,7 +176,7 @@ export default function Home() {
               气味档案
             </h2>
             <span className="text-xs text-ink-700/50">
-              点击卡片展开完整回忆
+              {selectionMode ? '勾选卡片即可加入本批复核' : '点击卡片展开完整回忆'}
             </span>
           </div>
 
@@ -117,18 +206,29 @@ export default function Home() {
             </div>
           ) : (
             <div className="masonry-grid">
-              {filteredMemories.map((m, idx) => (
-                <div key={m.id} data-memory-id={m.id}>
-                  <MemoryCard
-                    memory={m}
-                    index={idx}
-                    isExpanded={expandedId === m.id}
-                    onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
-                    onEdit={() => openEditModal(m)}
-                    onDelete={() => handleDelete(m.id)}
-                  />
-                </div>
-              ))}
+              {filteredMemories.map((m, idx) => {
+                const batchId = m.review_batch_id;
+                const isActive = !!batchId && activeBatchIds.has(batchId);
+                return (
+                  <div key={m.id} data-memory-id={m.id}>
+                    <MemoryCard
+                      memory={m}
+                      index={idx}
+                      isExpanded={expandedId === m.id}
+                      onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
+                      onEdit={() => openEditModal(m)}
+                      onDelete={() => handleDelete(m.id)}
+                      selectionMode={selectionMode}
+                      selected={selectedSet.has(m.id)}
+                      onToggleSelect={() => toggleSelect(m.id)}
+                      activeBatchCode={isActive ? batchCodeMap.get(batchId!) ?? null : null}
+                      invalidBatchCode={
+                        !isActive && batchId ? batchCodeMap.get(batchId) ?? null : null
+                      }
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
