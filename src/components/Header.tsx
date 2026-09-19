@@ -1,11 +1,12 @@
-import { Plus } from 'lucide-react';
+import { Plus, BadgeCheck } from 'lucide-react';
 
 interface Props {
   onAdd: () => void;
   memoryCount: number;
+  reviewedCount: number;
 }
 
-export default function Header({ onAdd, memoryCount }: Props) {
+export default function Header({ onAdd, memoryCount, reviewedCount }: Props) {
   return (
     <header className="relative pt-14 pb-8 md:pt-20 md:pb-12">
       <div className="container max-w-6xl">
@@ -30,6 +31,10 @@ export default function Header({ onAdd, memoryCount }: Props) {
               <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-moss-100 text-moss-600 text-sm border border-moss-200">
                 <span className="text-base">🌿</span>
                 仅你可见
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-moss-100 text-moss-600 text-sm border border-moss-200">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                已复核 <b className="text-moss-700 font-semibold">{reviewedCount}</b>
               </span>
             </div>
           </div>

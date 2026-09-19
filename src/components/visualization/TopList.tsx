@@ -2,13 +2,15 @@ import { useMemo } from 'react';
 import type { SmellMemory } from '../../utils/constants';
 import { getTopIntensityMemories, contrastTextColor } from '../../utils/helpers';
 import { getSeasonInfo, getSmellTypeInfo } from '../../utils/constants';
+import { BadgeCheck } from 'lucide-react';
 
 interface Props {
   memories: SmellMemory[];
+  reviewedIds?: Set<string>;
   onSelect?: (id: string) => void;
 }
 
-export default function TopList({ memories, onSelect }: Props) {
+export default function TopList({ memories, reviewedIds, onSelect }: Props) {
   const top5 = useMemo(() => getTopIntensityMemories(memories, 5), [memories]);
 
   return (
@@ -24,11 +26,14 @@ export default function TopList({ memories, onSelect }: Props) {
           top5.map((m, idx) => {
             const season = getSeasonInfo(m.season);
             const stype = getSmellTypeInfo(m.smell_type);
+            const reviewed = !!reviewedIds?.has(m.id);
             return (
               <button
                 key={m.id}
                 onClick={() => onSelect?.(m.id)}
-                className="w-full group flex items-center gap-3 p-2.5 rounded-xl bg-paper-100/60 hover:bg-paper-200/80 transition-all duration-200 text-left"
+                className={`w-full group flex items-center gap-3 p-2.5 rounded-xl bg-paper-100/60 hover:bg-paper-200/80 transition-all duration-200 text-left ${
+                  reviewed ? 'ring-1 ring-moss-300' : ''
+                }`}
               >
                 <div
                   className="w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center text-lg font-bold shadow-sm"
@@ -44,6 +49,7 @@ export default function TopList({ memories, onSelect }: Props) {
                     <span className="text-base">{season.emoji}</span>
                     <span className="text-base">{stype.emoji}</span>
                     <span className="text-sm font-medium text-ink-800 truncate">{m.location}</span>
+                    {reviewed && <BadgeCheck className="w-3.5 h-3.5 text-moss-500 shrink-0" />}
                   </div>
                   <div className="text-[11px] text-ink-700/60 truncate">{m.source_guess}</div>
                 </div>

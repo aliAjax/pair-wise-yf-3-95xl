@@ -2,6 +2,15 @@ export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 export type SmellType = 'woody' | 'floral' | 'fruity' | 'earthy' | 'spicy' | 'sweet' | 'musty' | 'fresh' | 'burnt' | 'other';
 export type Emotion = 'warm' | 'nostalgic' | 'peaceful' | 'melancholy' | 'joyful' | 'uncomfortable' | 'surprising';
 
+/** 复核批次失效原因：记录被编辑 / 移除 / 再次复核 */
+export type ReviewInvalidReason = 'edited' | 'deleted' | 'rereviewed';
+
+/** 记录上一次（可能已失效的）复核结果；批次有效时记录才处于「已复核」 */
+export interface MemoryReview {
+  batch_id: string;
+  reviewed_at: string;
+}
+
 export interface SmellMemory {
   id: string;
   location: string;
@@ -16,7 +25,35 @@ export interface SmellMemory {
   want_again: boolean;
   created_at: string;
   updated_at: string;
+  review?: MemoryReview;
 }
+
+/** 封存复核批次摘要；失效后摘要保留，仅状态改变 */
+export interface ReviewBatch {
+  id: string;
+  created_at: string;
+  memory_ids: string[];
+  memory_count: number;
+  location: string;
+  smell_type: SmellType;
+  intensity_min: number;
+  intensity_max: number;
+  avg_intensity: number;
+  status: 'active' | 'invalidated';
+  invalidated_at?: string;
+  invalid_reason?: ReviewInvalidReason;
+  invalid_memory_id?: string;
+}
+
+export const MIN_REVIEW_COUNT = 2;
+export const MAX_REVIEW_COUNT = 4;
+export const MAX_INTENSITY_GAP = 3;
+
+export const REVIEW_INVALID_LABELS: Record<ReviewInvalidReason, string> = {
+  edited: '记录被编辑',
+  deleted: '记录被移除',
+  rereviewed: '记录被再次复核',
+};
 
 export const SEASONS: { value: Season; label: string; emoji: string }[] = [
   { value: 'spring', label: '春', emoji: '🌸' },

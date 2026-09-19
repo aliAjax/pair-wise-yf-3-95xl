@@ -4,9 +4,10 @@ import { getSmellTypeInfo } from '../../utils/constants';
 
 interface Props {
   memories: SmellMemory[];
+  reviewedIds?: Set<string>;
 }
 
-export default function HumidityScatter({ memories }: Props) {
+export default function HumidityScatter({ memories, reviewedIds }: Props) {
   const points = useMemo(() => {
     return memories.map((m) => {
       const typeInfo = getSmellTypeInfo(m.smell_type);
@@ -18,9 +19,10 @@ export default function HumidityScatter({ memories }: Props) {
         location: m.location,
         intensity: m.intensity,
         humidity: m.humidity,
+        reviewed: !!reviewedIds?.has(m.id),
       };
     });
-  }, [memories]);
+  }, [memories, reviewedIds]);
 
   const width = 280;
   const height = 180;
@@ -91,18 +93,29 @@ export default function HumidityScatter({ memories }: Props) {
         <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#CBB993" strokeWidth="1.5" />
         {points.map((p) => (
           <g key={p.id} className="group">
+            {p.reviewed && (
+              <circle
+                cx={toX(p.x)}
+                cy={toY(p.y)}
+                r={8 + p.intensity * 0.4}
+                fill="none"
+                stroke="#3D5A4A"
+                strokeWidth={1.5}
+                strokeOpacity={0.55}
+              />
+            )}
             <circle
               cx={toX(p.x)}
               cy={toY(p.y)}
               r={5 + p.intensity * 0.4}
               fill={p.color}
               fillOpacity="0.85"
-              stroke="#FBF7EE"
-              strokeWidth="1.5"
+              stroke={p.reviewed ? '#3D5A4A' : '#FBF7EE'}
+              strokeWidth={p.reviewed ? 2 : 1.5}
               className="transition-all duration-300 hover:r-[12px]"
               style={{ filter: 'drop-shadow(0 1px 2px rgba(92,58,29,0.2))' }}
             />
-            <title>{`${p.location}\n强度 ${p.intensity} / 湿度 ${p.humidity}`}</title>
+            <title>{`${p.location}\n强度 ${p.intensity} / 湿度 ${p.humidity}${p.reviewed ? '\n已复核' : ''}`}</title>
           </g>
         ))}
       </svg>

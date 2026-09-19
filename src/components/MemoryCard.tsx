@@ -1,7 +1,8 @@
 import type { SmellMemory } from '../utils/constants';
-import { getSeasonInfo, getSmellTypeInfo, getEmotionInfo } from '../utils/constants';
+import { getSeasonInfo, getSmellTypeInfo, getEmotionInfo, REVIEW_INVALID_LABELS } from '../utils/constants';
+import type { ReviewBatch } from '../utils/constants';
 import { formatDate, contrastTextColor } from '../utils/helpers';
-import { Pencil, Trash2, ChevronDown, ChevronUp, Heart } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, ChevronUp, Heart, Check, BadgeCheck, AlertCircle } from 'lucide-react';
 
 interface Props {
   memory: SmellMemory;
@@ -10,9 +11,16 @@ interface Props {
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  reviewedBatch?: ReviewBatch | null;
+  invalidBatch?: ReviewBatch | null;
 }
 
-export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit, onDelete }: Props) {
+export default function MemoryCard({
+  memory, index, isExpanded, onToggle, onEdit, onDelete,
+  selectable = false, selected = false, reviewedBatch = null, invalidBatch = null,
+}: Props) {
   const season = getSeasonInfo(memory.season);
   const stype = getSmellTypeInfo(memory.smell_type);
   const emotion = getEmotionInfo(memory.emotion);
@@ -22,8 +30,13 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
 
   return (
     <article
-      className="group relative bg-paper-50 rounded-2xl border border-paper-300 shadow-card overflow-hidden hover:shadow-paper-hover hover:-translate-y-1 transition-all duration-300 animate-fadeInUp"
+      className={`group relative bg-paper-50 rounded-2xl border shadow-card overflow-hidden transition-all duration-300 animate-fadeInUp ${
+        selected
+          ? 'border-moss-400 ring-2 ring-moss-300/70 hover:-translate-y-1'
+          : 'border-paper-300 hover:shadow-paper-hover hover:-translate-y-1'
+      } ${selectable ? 'cursor-pointer' : ''}`}
       style={{ animationDelay: `${Math.min(index * 60, 600)}ms` }}
+      onClick={selectable ? onToggle : undefined}
     >
       <div className="flex">
         <div
@@ -36,18 +49,29 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
 
         <div className="flex-1 min-w-0">
           <div
-            className="p-4 pb-3 cursor-pointer select-none"
-            onClick={onToggle}
+            className={`p-4 pb-3 select-none ${selectable ? 'cursor-pointer' : 'cursor-pointer'}`}
+            onClick={selectable ? undefined : onToggle}
           >
             <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="min-w-0 flex-1">
-                <h3 className="font-serif text-xl font-semibold text-ink-800 leading-tight truncate">
-                  {memory.location}
-                </h3>
-                <p className="text-sm text-ink-700/70 mt-0.5 truncate">
-                  <span className="mr-1" style={{ color: stype.color }}>{stype.emoji}</span>
-                  {memory.source_guess}
-                </p>
+              <div className="min-w-0 flex-1 flex items-start gap-2">
+                {selectable && (
+                  <span
+                    className={`mt-0.5 w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                      selected ? 'bg-moss-500 border-moss-500 text-paper-50' : 'border-paper-400 bg-paper-50 text-transparent'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-serif text-xl font-semibold text-ink-800 leading-tight truncate">
+                    {memory.location}
+                  </h3>
+                  <p className="text-sm text-ink-700/70 mt-0.5 truncate">
+                    <span className="mr-1" style={{ color: stype.color }}>{stype.emoji}</span>
+                    {memory.source_guess}
+                  </p>
+                </div>
               </div>
               <div
                 className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center shadow-sm border-2 border-paper-50"
@@ -77,6 +101,14 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
               {memory.want_again && (
                 <span className="scent-tag bg-moss-100 text-moss-600">
                   <Heart className="w-3 h-3 fill-current" /> 想再闻
+                </span>
+              )}
+              {reviewedBatch && (
+                <span
+                  className="scent-tag bg-moss-100 text-moss-600 ring-1 ring-moss-300"
+                  title={`复核批次 ${reviewedBatch.id} · ${formatDate(reviewedBatch.created_at)}`}
+                >
+                  <BadgeCheck className="w-3 h-3" /> 已复核
                 </span>
               )}
             </div>
@@ -118,20 +150,27 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
 
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-paper-200/80">
               <span className="text-[11px] text-ink-700/50">{formatDate(memory.created_at)}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggle(); }}
-                className="inline-flex items-center gap-1 text-[11px] text-ochre-600 hover:text-ochre-700 font-medium"
-              >
-                {isExpanded ? (
-                  <><ChevronUp className="w-3.5 h-3.5" /> 收起</>
-                ) : (
-                  <><ChevronDown className="w-3.5 h-3.5" /> 展开回忆</>
-                )}
-              </button>
+              {!selectable && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggle(); }}
+                  className="inline-flex items-center gap-1 text-[11px] text-ochre-600 hover:text-ochre-700 font-medium"
+                >
+                  {isExpanded ? (
+                    <><ChevronUp className="w-3.5 h-3.5" /> 收起</>
+                  ) : (
+                    <><ChevronDown className="w-3.5 h-3.5" /> 展开回忆</>
+                  )}
+                </button>
+              )}
+              {selectable && (
+                <span className="text-[11px] font-medium text-moss-600">
+                  {selected ? '已勾选' : '点击勾选'}
+                </span>
+              )}
             </div>
           </div>
 
-          {isExpanded && (
+          {isExpanded && !selectable && (
             <div className="px-4 pb-4 animate-expand overflow-hidden">
               <div className="p-4 rounded-xl bg-paper-100/70 border border-paper-200/80">
                 <div className="flex items-center gap-2 mb-2">
@@ -141,6 +180,28 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
                   {memory.memory_text}
                 </p>
               </div>
+
+              {reviewedBatch && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-moss-100/70 border border-moss-200 text-xs text-moss-600">
+                  <BadgeCheck className="w-4 h-4 shrink-0" />
+                  <span>
+                    已于 {formatDate(memory.review!.reviewed_at)} 随封存复核批次通过复核
+                    （同批 {reviewedBatch.memory_count} 条 · {getSmellTypeInfo(reviewedBatch.smell_type).label} ·
+                    强度 {reviewedBatch.intensity_min}～{reviewedBatch.intensity_max}）
+                  </span>
+                </div>
+              )}
+              {!reviewedBatch && invalidBatch && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-brick-500/10 border border-brick-500/30 text-xs text-brick-600">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>
+                    原复核批次（{formatDate(invalidBatch.created_at)}）因
+                    {invalidBatch.invalid_reason ? REVIEW_INVALID_LABELS[invalidBatch.invalid_reason] : '内容变动'}
+                    已失效，原结果保留，状态已退回待复核
+                  </span>
+                </div>
+              )}
+
               <div className="mt-3 flex items-center justify-between pt-2 border-t border-paper-200/60">
                 <div className="flex items-center gap-1.5 text-[11px] text-ink-700/50">
                   <span>更新于 {formatDate(memory.updated_at)}</span>
@@ -163,7 +224,7 @@ export default function MemoryCard({ memory, index, isExpanded, onToggle, onEdit
             </div>
           )}
 
-          {!isExpanded && (
+          {!isExpanded && !selectable && (
             <div className="px-4 pb-3 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 -mt-1">
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}

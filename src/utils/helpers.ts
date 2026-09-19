@@ -1,7 +1,49 @@
 import type { SmellMemory } from './constants';
+import { MAX_INTENSITY_GAP, MAX_REVIEW_COUNT, MIN_REVIEW_COUNT } from './constants';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+}
+
+export type ReviewRejectReason =
+  | { code: 'count'; message: string }
+  | { code: 'location'; message: string }
+  | { code: 'smellType'; message: string }
+  | { code: 'intensity'; message: string };
+
+/**
+ * 封存复核前置校验：
+ * 须勾选 2~4 条；地点必须一致；气味类型必须一致；强度极差不得超过三档。
+ * 校验失败即整批拒绝，不改动任何记录。
+ */
+export function validateReviewBatch(memories: SmellMemory[]): ReviewRejectReason | null {
+  if (memories.length < MIN_REVIEW_COUNT || memories.length > MAX_REVIEW_COUNT) {
+    return {
+      code: 'count',
+      message: `请勾选 ${MIN_REVIEW_COUNT}～${MAX_REVIEW_COUNT} 条记忆后再开启复核（当前 ${memories.length} 条）`,
+    };
+  }
+
+  const locations = new Set(memories.map((m) => m.location.trim()));
+  if (locations.size > 1) {
+    return { code: 'location', message: '整批拒绝：批次内地点不一致，封存复核要求同一场所的记忆' };
+  }
+
+  const types = new Set(memories.map((m) => m.smell_type));
+  if (types.size > 1) {
+    return { code: 'smellType', message: '整批拒绝：批次内气味类型不一致，无法共同封存' };
+  }
+
+  const intensities = memories.map((m) => m.intensity);
+  const gap = Math.max(...intensities) - Math.min(...intensities);
+  if (gap > MAX_INTENSITY_GAP) {
+    return {
+      code: 'intensity',
+      message: `整批拒绝：强度相差 ${gap} 档，超过三档的允许范围（强度 ${Math.min(...intensities)}～${Math.max(...intensities)}）`,
+    };
+  }
+
+  return null;
 }
 
 export function formatDate(iso: string): string {
